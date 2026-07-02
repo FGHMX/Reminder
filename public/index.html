@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laguna Capital — Earnings Reminder</title>
+  <meta name="description" content="Automated earnings call and release notifications for Laguna Capital analysts">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- ═══════════════════════════════════════════════════════════
+       Background Glow Effects
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Navigation
+       ═══════════════════════════════════════════════════════════ -->
+  <nav class="nav" id="main-nav">
+    <div class="nav__brand">
+      <span class="nav__logo">🏛️</span>
+      <span class="nav__name">Laguna Capital</span>
+    </div>
+    <div class="nav__links">
+      <a href="#register" class="nav__link" data-section="register">Registro</a>
+      <a href="#dashboard" class="nav__link" data-section="dashboard">Dashboard</a>
+      <a href="#calendar" class="nav__link" data-section="calendar">Calendario</a>
+      <a href="#logs" class="nav__link" data-section="logs">Historial</a>
+    </div>
+    <div class="nav__status" id="status-indicator">
+      <span class="nav__status-dot"></span>
+      <span class="nav__status-text">Sistema Activo</span>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Hero Section
+       ═══════════════════════════════════════════════════════════ -->
+  <header class="hero" id="hero">
+    <div class="hero__content">
+      <div class="hero__badge">Earnings Intelligence</div>
+      <h1 class="hero__title">
+        Nunca pierdas un
+        <span class="hero__highlight">Earnings Call</span>
+      </h1>
+      <p class="hero__subtitle">
+        Sistema automatizado que monitorea tus empresas asignadas y te notifica
+        por correo cuando publican Earnings Calls o Earnings Releases.
+      </p>
+      <div class="hero__actions">
+        <a href="#register" class="btn btn--primary btn--lg">
+          <span class="btn__icon">📋</span>
+          Registrar Analista
+        </a>
+        <a href="#dashboard" class="btn btn--ghost btn--lg">
+          <span class="btn__icon">📊</span>
+          Ver Dashboard
+        </a>
+      </div>
+      <div class="hero__stats" id="hero-stats">
+        <div class="hero__stat">
+          <span class="hero__stat-value" id="stat-analysts">0</span>
+          <span class="hero__stat-label">Analistas</span>
+        </div>
+        <div class="hero__stat">
+          <span class="hero__stat-value" id="stat-tickers">0</span>
+          <span class="hero__stat-label">Tickers</span>
+        </div>
+        <div class="hero__stat">
+          <span class="hero__stat-value" id="stat-notifications">0</span>
+          <span class="hero__stat-label">Notificaciones</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- ═════════════════════════════════════════════════════════
+         Register Section
+         ═════════════════════════════════════════════════════════ -->
+    <section class="section" id="register">
+      <div class="section__header">
+        <h2 class="section__title">
+          <span class="section__icon">📋</span>
+          Registro de Analista
+        </h2>
+        <p class="section__description">
+          Ingresa tus datos y sube un archivo CSV con los tickers de tu cobertura.
+        </p>
+      </div>
+
+      <div class="register-grid">
+        <!-- Form Card -->
+        <div class="card card--glass">
+          <form id="register-form" class="form">
+            <div class="form__group">
+              <label for="analyst-name" class="form__label">Nombre del Analista</label>
+              <input
+                type="text"
+                id="analyst-name"
+                name="name"
+                class="form__input"
+                placeholder="Ej: Juan Pérez"
+                required
+              >
+            </div>
+
+            <div class="form__group">
+              <label for="analyst-email" class="form__label">Correo Electrónico</label>
+              <input
+                type="email"
+                id="analyst-email"
+                name="email"
+                class="form__input"
+                placeholder="analista@lagunacapital.com"
+                required
+              >
+            </div>
+
+            <div class="form__group">
+              <label for="csv-file" class="form__label">Archivo CSV de Tickers</label>
+              <div class="form__dropzone" id="dropzone">
+                <input
+                  type="file"
+                  id="csv-file"
+                  name="csv"
+                  accept=".csv"
+                  class="form__file-input"
+                  required
+                >
+                <div class="form__dropzone-content" id="dropzone-content">
+                  <span class="form__dropzone-icon">📁</span>
+                  <p class="form__dropzone-text">
+                    Arrastra tu CSV aquí o <span class="form__dropzone-browse">selecciona un archivo</span>
+                  </p>
+                  <p class="form__dropzone-hint">CSV con columnas: ticker, sector, subsector</p>
+                </div>
+                <div class="form__dropzone-file" id="dropzone-file" style="display: none;">
+                  <span class="form__dropzone-file-icon">📄</span>
+                  <span class="form__dropzone-file-name" id="file-name"></span>
+                  <button type="button" class="form__dropzone-remove" id="remove-file">✕</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- CSV Preview -->
+            <div class="csv-preview" id="csv-preview" style="display: none;">
+              <h4 class="csv-preview__title">Vista Previa del CSV</h4>
+              <div class="csv-preview__table-wrap">
+                <table class="csv-preview__table" id="csv-table">
+                  <thead id="csv-thead"></thead>
+                  <tbody id="csv-tbody"></tbody>
+                </table>
+              </div>
+              <p class="csv-preview__count" id="csv-count"></p>
+            </div>
+
+            <button type="submit" class="btn btn--primary btn--full" id="submit-btn">
+              <span class="btn__icon">🚀</span>
+              Registrar Analista
+            </button>
+          </form>
+        </div>
+
+        <!-- CSV Format Guide -->
+        <div class="card card--glass">
+          <h3 class="card__title">📋 Formato del CSV</h3>
+          <p class="card__text">
+            El archivo CSV debe tener las siguientes columnas:
+          </p>
+          <div class="csv-example">
+            <div class="csv-example__header">
+              <span class="csv-example__tag">CSV</span>
+              <button class="csv-example__copy" id="copy-example" title="Copiar ejemplo">📋</button>
+            </div>
+            <pre class="csv-example__code" id="csv-example-code">ticker,sector,subsector
+AAPL,Technology,Consumer Electronics
+MSFT,Technology,Software
+GOOGL,Technology,Internet Services
+JNJ,Healthcare,Pharmaceuticals
+PFE,Healthcare,Biotechnology
+JPM,Financials,Banks
+GS,Financials,Investment Banking
+XOM,Energy,Oil &amp; Gas</pre>
+          </div>
+
+          <div class="info-cards">
+            <div class="info-card">
+              <span class="info-card__icon">⏰</span>
+              <div>
+                <h4 class="info-card__title">Horario de Ejecución</h4>
+                <p class="info-card__text">El sistema verifica automáticamente todos los días hábiles a las 4:30 PM ET, después del cierre del mercado.</p>
+              </div>
+            </div>
+            <div class="info-card">
+              <span class="info-card__icon">📧</span>
+              <div>
+                <h4 class="info-card__title">Notificaciones</h4>
+                <p class="info-card__text">Recibirás un correo cada vez que una empresa de tu cobertura publique un Earnings Call o Earnings Release.</p>
+              </div>
+            </div>
+            <div class="info-card">
+              <span class="info-card__icon">🔄</span>
+              <div>
+                <h4 class="info-card__title">Actualización</h4>
+                <p class="info-card__text">Puedes actualizar tu lista de tickers en cualquier momento volviendo a registrarte con el mismo correo.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════
+         Calendar Section
+         ═════════════════════════════════════════════════════════ -->
+    <section class="section" id="calendar">
+      <div class="section__header calendar-header">
+        <div>
+          <h2 class="section__title">
+            <span class="section__icon">🗓️</span>
+            Earnings Calendar
+          </h2>
+          <p class="section__description" id="calendar-week-label">
+            Semana actual
+          </p>
+        </div>
+        <div class="calendar-controls">
+          <button class="btn btn--outline" id="prev-week-btn">◀ Anterior</button>
+          <button class="btn btn--primary" id="current-week-btn">Esta Semana</button>
+          <button class="btn btn--outline" id="next-week-btn">Siguiente ▶</button>
+        </div>
+      </div>
+
+      <div class="calendar-legend card card--glass">
+        <h4 class="calendar-legend__title">Sectores</h4>
+        <div class="calendar-legend__items">
+          <div class="legend-item"><span class="legend-color sector-industrials"></span> Industrials</div>
+          <div class="legend-item"><span class="legend-color sector-reits"></span> REITS</div>
+          <div class="legend-item"><span class="legend-color sector-materials"></span> Materials</div>
+          <div class="legend-item"><span class="legend-color sector-consumer-staples"></span> Consumer Staples</div>
+          <div class="legend-item"><span class="legend-color sector-information-technology"></span> Information Tech</div>
+          <div class="legend-item"><span class="legend-color sector-healthcare"></span> Healthcare</div>
+          <div class="legend-item"><span class="legend-color sector-energy-and-utilities"></span> Energy & Utilities</div>
+          <div class="legend-item"><span class="legend-color sector-communication-services"></span> Communication</div>
+          <div class="legend-item"><span class="legend-color sector-consumer-discretionary"></span> Consumer Disc.</div>
+          <div class="legend-item"><span class="legend-color ticker-bg-default"></span> Otros</div>
+        </div>
+      </div>
+
+      <div class="calendar-wrapper card card--glass">
+        <div class="calendar-grid" id="calendar-grid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════
+         Dashboard Section
+         ═════════════════════════════════════════════════════════ -->
+    <section class="section" id="dashboard">
+      <div class="section__header">
+        <h2 class="section__title">
+          <span class="section__icon">📊</span>
+          Dashboard
+        </h2>
+        <p class="section__description">
+          Analistas registrados y sus asignaciones de cobertura.
+        </p>
+      </div>
+
+      <!-- Manual Check -->
+      <div class="check-panel card card--glass">
+        <div class="check-panel__info">
+          <h3 class="check-panel__title">🔍 Verificación Manual</h3>
+          <p class="check-panel__text">Ejecuta una verificación inmediata de earnings para hoy o una fecha específica.</p>
+        </div>
+        <div class="check-panel__actions">
+          <input type="date" id="check-date" class="form__input form__input--sm">
+          <button class="btn btn--accent" id="check-now-btn">
+            <span class="btn__icon">⚡</span>
+            Verificar Ahora
+          </button>
+        </div>
+      </div>
+
+      <!-- Analysts Grid -->
+      <div class="analysts-grid" id="analysts-grid">
+        <!-- Populated by JS -->
+      </div>
+
+      <div class="empty-state" id="empty-analysts" style="display: none;">
+        <span class="empty-state__icon">👤</span>
+        <h3 class="empty-state__title">Sin Analistas Registrados</h3>
+        <p class="empty-state__text">Registra un analista para comenzar a monitorear earnings.</p>
+        <a href="#register" class="btn btn--primary">Registrar Analista</a>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════
+         Logs Section
+         ═════════════════════════════════════════════════════════ -->
+    <section class="section" id="logs">
+      <div class="section__header">
+        <h2 class="section__title">
+          <span class="section__icon">📜</span>
+          Historial de Notificaciones
+        </h2>
+        <p class="section__description">
+          Registro de todas las alertas de earnings enviadas.
+        </p>
+      </div>
+
+      <!-- Check History -->
+      <div class="card card--glass" id="check-history-card">
+        <h3 class="card__title">📅 Historial de Verificaciones</h3>
+        <div class="check-history" id="check-history">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Notification Log -->
+      <div class="card card--glass">
+        <h3 class="card__title">📨 Notificaciones Enviadas</h3>
+        <div class="log-table-wrap">
+          <table class="log-table" id="log-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Analista</th>
+                <th>Ticker</th>
+                <th>Empresa</th>
+                <th>Tipo</th>
+                <th>Título</th>
+              </tr>
+            </thead>
+            <tbody id="log-tbody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="empty-logs" style="display: none;">
+          <span class="empty-state__icon">📭</span>
+          <h3 class="empty-state__title">Sin Notificaciones</h3>
+          <p class="empty-state__text">Aún no se han enviado notificaciones de earnings.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Footer
+       ═══════════════════════════════════════════════════════════ -->
+  <footer class="footer">
+    <p class="footer__text">
+      🏛️ Laguna Capital — Earnings Reminder System &nbsp;|&nbsp; Powered by FMP API
+    </p>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Toast Container
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Ticker Detail Modal
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="ticker-modal">
+      <div class="modal__header">
+        <h3 class="modal__title" id="modal-title">Tickers del Analista</h3>
+        <button class="modal__close" id="modal-close">✕</button>
+      </div>
+      <div class="modal__body" id="modal-body">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Company Profile Sidebar (Off-canvas)
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+  <div class="profile-sidebar" id="profile-sidebar">
+    <div class="profile-sidebar__header">
+      <h3 class="profile-sidebar__title">Company Profile</h3>
+      <button class="profile-sidebar__close" id="sidebar-close">&times;</button>
+    </div>
+    <div class="profile-sidebar__content" id="profile-sidebar-content">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

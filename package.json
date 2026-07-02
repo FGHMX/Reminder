@@ -1,0 +1,23 @@
+{
+  "name": "laguna-earnings-reminder",
+  "version": "1.0.0",
+  "description": "Earnings Call & Release notification system for Laguna Capital analysts",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "csv-parse": "^5.6.0",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.16"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
