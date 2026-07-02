@@ -91,114 +91,6 @@
     }, 100)
   );
 
-  // ── CSV File Handling ─────────────────────────────────────
-
-  // Drag and drop
-  ["dragenter", "dragover"].forEach((evt) => {
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.classList.add("dragover");
-    });
-  });
-
-  ["dragleave", "drop"].forEach((evt) => {
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.classList.remove("dragover");
-    });
-  });
-
-  dropzone.addEventListener("drop", (e) => {
-    const files = e.dataTransfer.files;
-    if (files.length > 0 && files[0].name.endsWith(".csv")) {
-      csvFileInput.files = files;
-      handleFileSelected(files[0]);
-    } else {
-      showToast("Solo se aceptan archivos CSV", "error");
-    }
-  });
-
-  csvFileInput.addEventListener("change", () => {
-    if (csvFileInput.files.length > 0) {
-      handleFileSelected(csvFileInput.files[0]);
-    }
-  });
-
-  removeFileBtn.addEventListener("click", () => {
-    csvFileInput.value = "";
-    dropzoneContent.style.display = "";
-    dropzoneFile.style.display = "none";
-    csvPreview.style.display = "none";
-  });
-
-  function handleFileSelected(file) {
-    fileName.textContent = file.name;
-    dropzoneContent.style.display = "none";
-    dropzoneFile.style.display = "flex";
-
-    // Parse and preview CSV
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const rows = parseCSV(e.target.result);
-        if (rows.length === 0) {
-          showToast("El CSV está vacío", "error");
-          return;
-        }
-        renderCSVPreview(rows);
-      } catch (err) {
-        showToast("Error al leer el CSV: " + err.message, "error");
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function parseCSV(text) {
-    const lines = text
-      .replace(/^\uFEFF/, "")
-      .trim()
-      .split(/\r?\n/)
-      .filter((l) => l.trim());
-    if (lines.length < 2) return [];
-
-    const headers = lines[0].split(",").map((h) => h.trim());
-    const rows = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",").map((v) => v.trim());
-      const row = {};
-      headers.forEach((h, idx) => {
-        row[h] = values[idx] || "";
-      });
-      rows.push(row);
-    }
-    return rows;
-  }
-
-  function renderCSVPreview(rows) {
-    if (rows.length === 0) return;
-
-    const headers = Object.keys(rows[0]);
-    csvThead.innerHTML = `<tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
-
-    const previewRows = rows.slice(0, 10);
-    csvTbody.innerHTML = previewRows
-      .map(
-        (row) =>
-          `<tr>${headers.map((h) => `<td>${escapeHtml(row[h] || "")}</td>`).join("")}</tr>`
-      )
-      .join("");
-
-    csvCount.textContent = `Mostrando ${previewRows.length} de ${rows.length} filas`;
-    csvPreview.style.display = "";
-  }
-
-  // Copy example CSV
-  copyExampleBtn.addEventListener("click", () => {
-    navigator.clipboard.writeText(csvExampleCode.textContent).then(() => {
-      showToast("Ejemplo CSV copiado al portapapeles", "success");
-    });
-  });
 
   // ── Form Submit ───────────────────────────────────────────
 
@@ -207,14 +99,20 @@
 
     const nameVal = $("#analyst-name").value.trim();
     const emailVal = $("#analyst-email").value.trim();
+    const minCapVal = $("#min-market-cap").value;
+    const maxCapVal = $("#max-market-cap").value;
+    const csvFile = $("#csv-file").files[0];
 
     if (!nameVal || !emailVal) {
       showToast("Completa todos los campos", "error");
       return;
     }
 
-    if (!csvFileInput.files.length) {
-      showToast("Selecciona un archivo CSV", "error");
+    const selectedSectors = Array.from($$(`input[name="sectors"]:checked`)).map(cb => cb.value);
+
+    // Permitimos enviar sin sectores SI se sube un CSV
+    if (selectedSectors.length === 0 && !csvFile) {
+      showToast("Selecciona al menos un sector o sube un archivo CSV", "error");
       return;
     }
 
@@ -224,21 +122,26 @@
     const formData = new FormData();
     formData.append("name", nameVal);
     formData.append("email", emailVal);
-    formData.append("csv", csvFileInput.files[0]);
+    formData.append("minMarketCap", minCapVal);
+    formData.append("maxMarketCap", maxCapVal);
+    
+    selectedSectors.forEach(s => formData.append("sectors[]", s));
+    
+    if (csvFile) {
+      formData.append("csvFile", csvFile);
+    }
 
     try {
       const res = await fetch("/api/analyst", {
         method: "POST",
         body: formData,
+        // No enviamos Content-Type para que el navegador configure el boundary automáticamente
       });
       const data = await res.json();
 
       if (res.ok && data.success) {
         showToast(data.message, "success");
         registerForm.reset();
-        dropzoneContent.style.display = "";
-        dropzoneFile.style.display = "none";
-        csvPreview.style.display = "none";
         loadDashboard();
       } else {
         showToast(data.error || "Error al registrar", "error");

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
   <!-- ═══════════════════════════════════════════════════════════
@@ -121,42 +121,90 @@
               >
             </div>
 
-            <div class="form__group">
-              <label for="csv-file" class="form__label">Archivo CSV de Tickers</label>
-              <div class="form__dropzone" id="dropzone">
+            <div class="form__group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <label for="min-market-cap" class="form__label">Market Cap Mínimo ($ Millones)</label>
                 <input
-                  type="file"
-                  id="csv-file"
-                  name="csv"
-                  accept=".csv"
-                  class="form__file-input"
+                  type="number"
+                  id="min-market-cap"
+                  name="minMarketCap"
+                  class="form__input"
+                  placeholder="Ej: 200"
+                  value="200"
                   required
                 >
-                <div class="form__dropzone-content" id="dropzone-content">
-                  <span class="form__dropzone-icon">📁</span>
-                  <p class="form__dropzone-text">
-                    Arrastra tu CSV aquí o <span class="form__dropzone-browse">selecciona un archivo</span>
-                  </p>
-                  <p class="form__dropzone-hint">CSV con columnas: ticker, sector, subsector</p>
-                </div>
-                <div class="form__dropzone-file" id="dropzone-file" style="display: none;">
-                  <span class="form__dropzone-file-icon">📄</span>
-                  <span class="form__dropzone-file-name" id="file-name"></span>
-                  <button type="button" class="form__dropzone-remove" id="remove-file">✕</button>
-                </div>
+              </div>
+              <div>
+                <label for="max-market-cap" class="form__label">Market Cap Máximo ($ Millones)</label>
+                <input
+                  type="number"
+                  id="max-market-cap"
+                  name="maxMarketCap"
+                  class="form__input"
+                  placeholder="Ej: 25000"
+                  value="25000"
+                  required
+                >
               </div>
             </div>
 
-            <!-- CSV Preview -->
-            <div class="csv-preview" id="csv-preview" style="display: none;">
-              <h4 class="csv-preview__title">Vista Previa del CSV</h4>
-              <div class="csv-preview__table-wrap">
-                <table class="csv-preview__table" id="csv-table">
-                  <thead id="csv-thead"></thead>
-                  <tbody id="csv-tbody"></tbody>
-                </table>
+            <div class="form__group">
+              <label class="form__label">Sectores de Cobertura</label>
+              <div class="sectors-grid" id="sectors-grid">
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="Industrials">
+                  <span class="sector-checkbox__label">Industrials</span>
+                </label>
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="REITS">
+                  <span class="sector-checkbox__label">REITS</span>
+                </label>
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="Materials">
+                  <span class="sector-checkbox__label">Materials</span>
+                </label>
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="Consumer Staples">
+                  <span class="sector-checkbox__label">Consumer Staples</span>
+                </label>
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="Information Technology">
+                  <span class="sector-checkbox__label">Information Technology</span>
+                </label>
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="Healthcare">
+                  <span class="sector-checkbox__label">Healthcare</span>
+                </label>
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="Energy and Utilities">
+                  <span class="sector-checkbox__label">Energy and Utilities</span>
+                </label>
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="Communication Services">
+                  <span class="sector-checkbox__label">Communication Services</span>
+                </label>
+                <label class="sector-checkbox">
+                  <input type="checkbox" name="sectors" value="Consumer Discretionary">
+                  <span class="sector-checkbox__label">Consumer Discretionary</span>
+                </label>
               </div>
-              <p class="csv-preview__count" id="csv-count"></p>
+              <p class="form__hint" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+                Se te asignarán automáticamente las empresas (dentro del rango de Market Cap) correspondientes a los sectores seleccionados.
+              </p>
+            </div>
+
+            <div class="form__group">
+              <label for="csv-file" class="form__label">Opcional: Agregar Tickers (CSV)</label>
+              <input
+                type="file"
+                id="csv-file"
+                name="csvFile"
+                class="form__input"
+                accept=".csv"
+              >
+              <p class="form__hint" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+                Puedes subir un archivo CSV con columnas: Ticker, Company, Sector, Subsector.
+              </p>
             </div>
 
             <button type="submit" class="btn btn--primary btn--full" id="submit-btn">
@@ -166,27 +214,18 @@
           </form>
         </div>
 
-        <!-- CSV Format Guide -->
+        <!-- Features Guide -->
         <div class="card card--glass">
-          <h3 class="card__title">📋 Formato del CSV</h3>
+          <h3 class="card__title">✨ Cobertura Automática</h3>
           <p class="card__text">
-            El archivo CSV debe tener las siguientes columnas:
+            Al seleccionar los sectores de tu cobertura, el sistema automáticamente:
           </p>
-          <div class="csv-example">
-            <div class="csv-example__header">
-              <span class="csv-example__tag">CSV</span>
-              <button class="csv-example__copy" id="copy-example" title="Copiar ejemplo">📋</button>
-            </div>
-            <pre class="csv-example__code" id="csv-example-code">ticker,sector,subsector
-AAPL,Technology,Consumer Electronics
-MSFT,Technology,Software
-GOOGL,Technology,Internet Services
-JNJ,Healthcare,Pharmaceuticals
-PFE,Healthcare,Biotechnology
-JPM,Financials,Banks
-GS,Financials,Investment Banking
-XOM,Energy,Oil &amp; Gas</pre>
-          </div>
+          <ul style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 24px; padding-left: 20px; line-height: 1.6;">
+            <li>Encuentra empresas con capitalización de $200M a $25B.</li>
+            <li>Monitorea y alerta sobre sus Earnings Calls y Releases.</li>
+            <li>Detecta y te notifica sobre nuevas <strong>IPOs</strong> en tus sectores.</li>
+            <li>Actualiza la lista de empresas semanalmente.</li>
+          </ul>
 
           <div class="info-cards">
             <div class="info-card">
@@ -395,6 +434,6 @@ XOM,Energy,Oil &amp; Gas</pre>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

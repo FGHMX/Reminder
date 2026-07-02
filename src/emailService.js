@@ -218,8 +218,101 @@ function formatNumber(num) {
   return num.toFixed(2);
 }
 
+// ── Build IPO Email ──────────────────────────────────────────
+
+function buildIPOEmail(analystName, date, ipoItems) {
+  let itemsHtml = "";
+  for (const item of ipoItems) {
+    itemsHtml += `
+      <div style="background: #1e293b; border-radius: 8px; padding: 14px 16px; margin-bottom: 8px; border-left: 3px solid #10b981;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 6px;">
+          <div>
+            <span style="color: #f1f5f9; font-weight: 700; font-size: 15px;">${item.company}</span>
+            <span style="color: #64748b; font-size: 13px; margin-left: 8px;">${item.symbol}</span>
+          </div>
+          <span style="background: #10b98122; color: #10b981; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap;">IPO</span>
+        </div>
+        <div style="margin-top: 6px;">
+          <span style="color: #94a3b8; font-size: 12px;">Sector: <strong>${item.sector}</strong></span>
+          <span style="color: #94a3b8; font-size: 12px; margin-left: 12px;">Exchange: ${item.exchange || 'N/A'}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const formattedDate = new Date(date).toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="max-width: 640px; margin: 0 auto; padding: 24px 16px;">
+    <!-- Header -->
+    <div style="text-align: center; padding: 32px 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 16px 16px 0 0; border: 1px solid #334155; border-bottom: none;">
+      <h1 style="margin: 0; color: #f8fafc; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">
+        🏛️ Laguna Capital
+      </h1>
+      <p style="margin: 8px 0 0; color: #10b981; font-size: 14px;">
+        IPO Alert
+      </p>
+    </div>
+    <!-- Greeting -->
+    <div style="background: #1e293b; padding: 20px 24px; border-left: 1px solid #334155; border-right: 1px solid #334155;">
+      <p style="margin: 0; color: #cbd5e1; font-size: 14px;">
+        Hola <strong style="color: #f1f5f9;">${analystName}</strong>,
+      </p>
+      <p style="margin: 8px 0 0; color: #94a3b8; font-size: 13px;">
+        Las siguientes empresas en tu cobertura han programado o realizado su IPO alrededor del <strong style="color: #cbd5e1;">${formattedDate}</strong>:
+      </p>
+    </div>
+    <!-- Content -->
+    <div style="background: #0f172a; padding: 24px; border: 1px solid #334155; border-top: none;">
+      ${itemsHtml}
+    </div>
+    <!-- Footer -->
+    <div style="text-align: center; padding: 20px; background: #1e293b; border-radius: 0 0 16px 16px; border: 1px solid #334155; border-top: none;">
+      <p style="margin: 0; color: #64748b; font-size: 11px;">
+        Laguna Capital — Earnings Reminder System<br>
+        This is an automated notification. Powered by FMP API.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+async function sendIPOEmail(analystEmail, analystName, date, ipoItems) {
+  const html = buildIPOEmail(analystName, date, ipoItems);
+  const subject = `🚀 IPO Alert — ${ipoItems.length} new IPO(s) detected`;
+
+  try {
+    const info = await getTransporter().sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: analystEmail,
+      subject,
+      html,
+    });
+    console.log(`[Email] Sent IPO alert to ${analystEmail}: ${info.messageId}`);
+    return true;
+  } catch (err) {
+    console.error(`[Email] Failed to send IPO alert to ${analystEmail}:`, err.message);
+    return false;
+  }
+}
+
 module.exports = {
   sendEarningsEmail,
+  sendIPOEmail,
   testEmailConnection,
   buildEarningsEmail,
 };

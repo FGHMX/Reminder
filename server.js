@@ -5,8 +5,6 @@
 require("dotenv").config();
 
 const express = require("express");
-const multer = require("multer");
-const { parse } = require("csv-parse/sync");
 const path = require("path");
 const fs = require("fs");
 
@@ -24,40 +22,65 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const upload = multer({
-  dest: uploadsDir,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-  fileFilter: (req, file, cb) => {
-    if (
-      file.mimetype === "text/csv" ||
-      file.originalname.endsWith(".csv")
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only CSV files are allowed"));
-    }
-  },
-});
-
 // ── API Routes ────────────────────────────────────────────────
 
-// Register analyst with CSV
-app.post("/api/analyst", upload.single("csv"), (req, res) => {
+const multer = require("multer");
+const upload = multer();
+const { parse } = require("csv-parse/sync");
+
+// Register analyst with sectors and/or CSV
+app.post("/api/analyst", upload.single("csvFile"), async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { name, email, minMarketCap, maxMarketCap } = req.body;
+    let sectors = req.body.sectors || [];
+    
+    // If only one sector is selected, FormData sends it as a string instead of an array
+    if (typeof sectors === "string") {
+      sectors = [sectors];
+    }
 
     if (!name || !email) {
       return res.status(400).json({ error: "Name and email are required" });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ error: "CSV file is required" });
+    const minCap = minMarketCap ? parseInt(minMarketCap, 10) * 1000000 : 200000000;
+    const maxCap = maxMarketCap ? parseInt(maxMarketCap, 10) * 1000000 : 25000000000;
+
+    let tickersData = [];
+
+    // Fetch from FMP if sectors were provided
+    if (sectors.length > 0) {
+      tickersData = await fmpService.getTickersBySectors(sectors, minCap, maxCap);
+    }
+
+    // Process CSV if provided
+    if (req.file) {
+      try {
+        const csvString = req.file.buffer.toString("utf8");
+        const records = parse(csvString, { columns: true, skip_empty_lines: true });
+        
+        for (const record of records) {
+          const ticker = (record.Ticker || record.ticker || "").trim().toUpperCase();
+          if (!ticker) continue;
+          
+          // Only add if it's not already in the FMP list
+          if (!tickersData.some(t => t.ticker === ticker)) {
+            tickersData.push({
+              ticker: ticker,
+              companyName: (record.Company || record.company || "").trim() || ticker,
+              sector: (record.Sector || record.sector || "Other").trim(),
+              subsector: (record.Subsector || record.subsector || "").trim()
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error parsing CSV:", err);
+        return res.status(400).json({ error: "Error parsing CSV file." });
+      }
+    }
+
+    if (tickersData.length === 0) {
+      return res.status(400).json({ error: "No tickers found for the selected sectors and no valid CSV was provided." });
     }
 
     // Check if analyst already exists
@@ -66,86 +89,32 @@ app.post("/api/analyst", upload.single("csv"), (req, res) => {
 
     if (existing) {
       analystId = existing.id;
-      console.log(`[API] Updating existing analyst: ${name} (${email})`);
+      db.updateAnalystSectors(analystId, sectors);
+      db.deleteTickersByAnalyst(analystId); // <-- Delete old tickers before inserting new ones
+      console.log(`[API] Updating existing analyst sectors: ${name} (${email})`);
     } else {
-      analystId = db.addAnalyst(name, email);
+      analystId = db.addAnalyst(name, email, sectors);
       console.log(`[API] New analyst registered: ${name} (${email})`);
     }
 
-    // Parse CSV (strip BOM if present)
-    const csvContent = fs.readFileSync(req.file.path, "utf-8").replace(/^\uFEFF/, "");
-    const records = parse(csvContent, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-      relax_column_count: true,
-    });
-
-    if (records.length === 0) {
-      return res.status(400).json({ error: "CSV file is empty or has no data rows" });
-    }
-
-    // Normalize column names (case-insensitive)
-    const normalizedRecords = records.map((row) => {
-      const normalized = {};
-      for (const [key, value] of Object.entries(row)) {
-        const lowerKey = key.toLowerCase().trim();
-        if (lowerKey === "ticker" || lowerKey === "symbol") {
-          normalized.ticker = value;
-        } else if (lowerKey === "sector") {
-          normalized.sector = value;
-        } else if (
-          lowerKey === "subsector" ||
-          lowerKey === "industry" ||
-          lowerKey === "sub-sector" ||
-          lowerKey === "sub_sector"
-        ) {
-          normalized.subsector = value;
-        }
-      }
-      return normalized;
-    });
-
-    // Validate that we have tickers
-    const validRecords = normalizedRecords.filter(
-      (r) => r.ticker && r.ticker.trim().length > 0
-    );
-
-    if (validRecords.length === 0) {
-      return res.status(400).json({
-        error:
-          'No valid tickers found. CSV must have a "ticker" column.',
-      });
-    }
-
     // Save tickers
-    db.addTickers(analystId, validRecords);
-
-    // Cleanup uploaded file
-    fs.unlinkSync(req.file.path);
+    db.addTickers(analystId, tickersData);
 
     res.json({
       success: true,
       analystId,
-      tickersAdded: validRecords.length,
+      tickersAdded: tickersData.length,
       message: existing
-        ? `Updated ${name}'s watchlist with ${validRecords.length} tickers`
-        : `Registered ${name} with ${validRecords.length} tickers`,
+        ? `Updated ${name}'s watchlist with ${tickersData.length} tickers`
+        : `Registered ${name} with ${tickersData.length} tickers`,
     });
   } catch (err) {
     console.error("[API] Error registering analyst:", err);
-
-    // Cleanup file on error
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-
     if (err.message && err.message.includes("UNIQUE constraint")) {
       return res.status(409).json({
-        error: "An analyst with this email is already registered. The CSV will update their tickers.",
+        error: "An analyst with this email is already registered.",
       });
     }
-
     res.status(500).json({ error: err.message || "Internal server error" });
   }
 });
@@ -300,9 +269,6 @@ app.get("*", (req, res) => {
 
 app.use((err, req, res, next) => {
   console.error("[Server] Error:", err);
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({ error: `Upload error: ${err.message}` });
-  }
   res.status(500).json({ error: err.message || "Internal server error" });
 });
 
