@@ -27,6 +27,7 @@ function initSchema() {
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL,
       email       TEXT    NOT NULL UNIQUE,
+      sectors     TEXT    NOT NULL DEFAULT '[]',
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -71,24 +72,37 @@ function initSchema() {
       created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // Migration for existing tables
+  try {
+    d.exec("ALTER TABLE analysts ADD COLUMN sectors TEXT NOT NULL DEFAULT '[]'");
+  } catch (err) {
+    // Column already exists, ignore
+  }
 }
 
 // ── Analyst CRUD ──────────────────────────────────────────────
 
-function addAnalyst(name, email) {
+function addAnalyst(name, email, sectors = []) {
   const d = getDb();
   const stmt = d.prepare(
-    "INSERT INTO analysts (name, email) VALUES (?, ?)"
+    "INSERT INTO analysts (name, email, sectors) VALUES (?, ?, ?)"
   );
-  const info = stmt.run(name.trim(), email.trim().toLowerCase());
+  const info = stmt.run(name.trim(), email.trim().toLowerCase(), JSON.stringify(sectors));
   return info.lastInsertRowid;
+}
+
+function updateAnalystSectors(id, sectors) {
+  const d = getDb();
+  const stmt = d.prepare("UPDATE analysts SET sectors = ? WHERE id = ?");
+  stmt.run(JSON.stringify(sectors), id);
 }
 
 function getAnalysts() {
   const d = getDb();
-  return d
+  const analysts = d
     .prepare(
-      `SELECT a.id, a.name, a.email, a.created_at,
+      `SELECT a.id, a.name, a.email, a.sectors, a.created_at,
               COUNT(t.id) AS ticker_count
        FROM analysts a
        LEFT JOIN tickers t ON t.analyst_id = a.id
@@ -96,11 +110,20 @@ function getAnalysts() {
        ORDER BY a.name`
     )
     .all();
+    
+  return analysts.map(a => ({
+    ...a,
+    sectors: JSON.parse(a.sectors || '[]')
+  }));
 }
 
 function getAnalystById(id) {
   const d = getDb();
-  return d.prepare("SELECT * FROM analysts WHERE id = ?").get(id);
+  const analyst = d.prepare("SELECT * FROM analysts WHERE id = ?").get(id);
+  if (analyst) {
+    analyst.sectors = JSON.parse(analyst.sectors || '[]');
+  }
+  return analyst;
 }
 
 function deleteAnalyst(id) {
@@ -149,6 +172,11 @@ function getTickersByAnalyst(analystId) {
       "SELECT * FROM tickers WHERE analyst_id = ? ORDER BY sector, subsector, ticker"
     )
     .all(analystId);
+}
+
+function deleteTickersByAnalyst(analystId) {
+  const d = getDb();
+  d.prepare("DELETE FROM tickers WHERE analyst_id = ?").run(analystId);
 }
 
 function getAllUniqueTickers() {
@@ -243,12 +271,14 @@ function closeDb() {
 module.exports = {
   getDb,
   addAnalyst,
+  updateAnalystSectors,
   getAnalysts,
   getAnalystById,
   deleteAnalyst,
   analystExists,
   addTickers,
   getTickersByAnalyst,
+  deleteTickersByAnalyst,
   getAllUniqueTickers,
   getTickersWithSectors,
   getAnalystsForTicker,

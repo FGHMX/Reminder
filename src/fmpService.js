@@ -117,6 +117,114 @@ async function getCompanyProfile(symbol) {
   }
 }
 
+// ── Sector Tickers (Stock Screener) ───────────────────────────
+
+const SECTOR_MAPPING = {
+  "Industrials": ["Industrials"],
+  "REITS": ["Real Estate"],
+  "Materials": ["Basic Materials"],
+  "Consumer Staples": ["Consumer Defensive"],
+  "Information Technology": ["Technology"],
+  "Healthcare": ["Healthcare"],
+  "Energy and Utilities": ["Energy", "Utilities"],
+  "Communication Services": ["Communication Services"],
+  "Consumer Discretionary": ["Consumer Cyclical"]
+};
+
+async function getTickersBySectors(sectors, minCap = 200000000, maxCap = 25000000000) {
+  if (!sectors || sectors.length === 0) return [];
+
+  const fmpSectors = new Set();
+  sectors.forEach((s) => {
+    if (SECTOR_MAPPING[s]) {
+      SECTOR_MAPPING[s].forEach((fmpSec) => fmpSectors.add(fmpSec));
+    }
+  });
+
+  const uniqueSectors = Array.from(fmpSectors);
+  if (uniqueSectors.length === 0) return [];
+
+  const allTickers = [];
+  const companyGroups = new Map();
+
+  for (const sector of uniqueSectors) {
+    try {
+      console.log(`[FMP Service] Fetching tickers for sector: ${sector} with cap ${minCap} - ${maxCap}`);
+      
+      const data = await fmpFetch("/company-screener", {
+        marketCapMoreThan: minCap,
+        marketCapLowerThan: maxCap,
+        sector: sector,
+        exchange: "NYSE,NASDAQ,AMEX",
+        isActivelyTrading: true,
+        limit: 5000
+      });
+      
+      if (Array.isArray(data)) {
+        let originalSector = sectors.find(s => SECTOR_MAPPING[s] && SECTOR_MAPPING[s].includes(sector)) || sector;
+        
+        for (const item of data) {
+          // Excluir acciones preferentes (-P), warrants (-W), unidades (-U), y dual-listings con punto (.)
+          if (item.symbol.includes('-P') || item.symbol.includes('-W') || item.symbol.includes('-U') || item.symbol.includes('.')) {
+            continue;
+          }
+          
+          const compName = item.companyName || item.symbol;
+          
+          if (!companyGroups.has(compName)) {
+            companyGroups.set(compName, []);
+          }
+          companyGroups.get(compName).push({
+            ticker: item.symbol,
+            companyName: compName,
+            sector: originalSector,
+            subsector: item.industry || "",
+            volume: item.volume || 0
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`[FMP] Error fetching tickers for sector ${sector}:`, err.message);
+    }
+    await sleep(200);
+  }
+  
+  // Pick the best ticker for each company
+  for (const [compName, group] of companyGroups.entries()) {
+    group.sort((a, b) => {
+      if (a.ticker.length !== b.ticker.length) {
+        return a.ticker.length - b.ticker.length;
+      }
+      return b.volume - a.volume;
+    });
+    
+    const best = group[0];
+    allTickers.push({
+      ticker: best.ticker,
+      companyName: best.companyName,
+      sector: best.sector,
+      subsector: best.subsector
+    });
+  }
+  
+  return allTickers;
+}
+
+// ── IPO Calendar ──────────────────────────────────────────────
+
+async function getIPOCalendar(fromDate, toDate) {
+  try {
+    const data = await fmpFetch("/ipo-calendar", {
+      from: fromDate,
+      to: toDate
+    });
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error("[FMP] IPO calendar error:", err.message);
+    return [];
+  }
+}
+
 // ── Earnings Detection Logic ──────────────────────────────────
 // Core function: checks what earnings events happened on a date
 // for a list of tickers
@@ -254,4 +362,7 @@ module.exports = {
   getCompanyProfile,
   checkEarningsForDate,
   isEarningsRelease,
+  getTickersBySectors,
+  getIPOCalendar,
+  SECTOR_MAPPING,
 };
