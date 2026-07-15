@@ -207,6 +207,35 @@ async function getTickersBySectors(sectors, minCap = 200000000, maxCap = 2500000
     });
   }
   
+  // Apply manual sector overrides
+  const overrides = {
+    "WALD": { sector: "Consumer Staples", companyName: "Waldencast plc", subsector: "Household & Personal Products" }
+  };
+
+  for (const [ticker, overrideData] of Object.entries(overrides)) {
+    const idx = allTickers.findIndex(t => t.ticker === ticker);
+    if (idx !== -1) {
+      if (!sectors.includes(overrideData.sector)) {
+        // Ticker was returned by FMP for a wrong sector that we requested, so remove it
+        allTickers.splice(idx, 1);
+      } else {
+        // Ticker was returned by FMP for its true sector, just fix the naming
+        allTickers[idx].sector = overrideData.sector;
+        allTickers[idx].subsector = overrideData.subsector;
+      }
+    } else {
+      if (sectors.includes(overrideData.sector)) {
+        // Ticker was not returned by FMP because it was requested in the wrong sector by them, manually inject it
+        allTickers.push({
+          ticker: ticker,
+          companyName: overrideData.companyName,
+          sector: overrideData.sector,
+          subsector: overrideData.subsector
+        });
+      }
+    }
+  }
+
   return allTickers;
 }
 
@@ -350,6 +379,99 @@ function getQuarterFromDate(dateStr) {
   return 4;
 }
 
+async function checkEarningsForDateRange(tickers, startDate, endDate) {
+  console.log(
+    `[FMP] Checking earnings for ${tickers.length} tickers between ${startDate} and ${endDate}...`
+  );
+
+  const results = [];
+
+  // Step 1: Get earnings calendar for date range
+  const calendar = await getEarningsCalendar(startDate, endDate);
+  const calendarSymbols = new Set(
+    calendar.map((e) => (e.symbol || "").toUpperCase())
+  );
+
+  console.log(
+    `[FMP] Earnings calendar has ${calendar.length} entries between ${startDate} and ${endDate}`
+  );
+
+  // Step 2: Filter to only our watched tickers
+  const matchedTickers = tickers.filter((t) => calendarSymbols.has(t));
+
+  console.log(
+    `[FMP] ${matchedTickers.length} of our tickers are in the earnings calendar for this week`
+  );
+
+  // Step 3: For each matched ticker, look for earnings releases & transcripts
+  for (const ticker of matchedTickers) {
+    const calendarEntries = calendar.filter(
+      (e) => (e.symbol || "").toUpperCase() === ticker
+    );
+    // Usually only one entry per ticker in a week, but we'll use the first one
+    const calendarEntry = calendarEntries.length > 0 ? calendarEntries[0] : null;
+
+    // Check press releases for earnings releases in the date range
+    const pressReleases = await getPressReleases(ticker, startDate, endDate);
+    const earningsReleases = pressReleases.filter(isEarningsRelease);
+
+    if (earningsReleases.length > 0) {
+      for (const release of earningsReleases) {
+        results.push({
+          ticker,
+          companyName:
+            calendarEntry?.companyName ||
+            release.symbol ||
+            ticker,
+          documentType: "Earnings Release",
+          title: release.title || "Earnings Release",
+          url: release.url || "",
+          date: release.publishedDate || startDate,
+          eps: calendarEntry?.eps || null,
+          epsEstimated: calendarEntry?.epsEstimated || null,
+          revenue: calendarEntry?.revenue || null,
+          revenueEstimated: calendarEntry?.revenueEstimated || null,
+        });
+      }
+    }
+
+    // Check for earnings call transcripts
+    if (calendarEntry && calendarEntry.date) {
+      const year = new Date(calendarEntry.date).getFullYear();
+      const quarter = getQuarterFromDate(calendarEntry.date);
+      const transcripts = await getEarningsTranscript(ticker, year, quarter);
+
+      if (transcripts.length > 0) {
+        const transcript = transcripts[0];
+        
+        // Ensure transcript date is within range
+        const transcriptDate = new Date(transcript.date);
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        // Simple check if it is broadly in the range, or we can just include it if it matches year/quarter
+        results.push({
+          ticker,
+          companyName: calendarEntry.companyName || ticker,
+          documentType: "Earnings Call Transcript",
+          title: `${calendarEntry.companyName || ticker} — Q${quarter} ${year} Earnings Call`,
+          url: "",
+          date: transcript.date || calendarEntry.date,
+          eps: calendarEntry.eps || null,
+          epsEstimated: calendarEntry.epsEstimated || null,
+          revenue: calendarEntry.revenue || null,
+          revenueEstimated: calendarEntry.revenueEstimated || null,
+        });
+      }
+    }
+
+    // Small delay between API calls to avoid rate limiting
+    await sleep(200);
+  }
+
+  return results;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -361,6 +483,7 @@ module.exports = {
   getLatestTranscripts,
   getCompanyProfile,
   checkEarningsForDate,
+  checkEarningsForDateRange,
   isEarningsRelease,
   getTickersBySectors,
   getIPOCalendar,

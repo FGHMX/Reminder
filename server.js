@@ -172,6 +172,16 @@ app.post("/api/check-now", async (req, res) => {
   }
 });
 
+// Manual weekly recap check
+app.post("/api/check-weekly-now", async (req, res) => {
+  try {
+    const result = await cronJob.runWeeklyRecap();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get notification log
 app.get("/api/logs", (req, res) => {
   try {

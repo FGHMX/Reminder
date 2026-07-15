@@ -3,7 +3,7 @@
 // ============================================================
 
 const cron = require("node-cron");
-const { format } = require("date-fns");
+const { format, subDays } = require("date-fns");
 
 const db = require("./database");
 const fmp = require("./fmpService");
@@ -195,6 +195,84 @@ async function runEarningsCheck(dateOverride = null) {
   }
 }
 
+// ── Weekly Recap ────────────────────────────────────────────────
+
+async function runWeeklyRecap() {
+  const endDate = format(new Date(), "yyyy-MM-dd");
+  const startDate = format(subDays(new Date(), 6), "yyyy-MM-dd"); // Past 7 days (including today)
+
+  console.log(`\n${"=".repeat(60)}`);
+  console.log(`[Cron] Starting weekly recap for range: ${startDate} to ${endDate}`);
+  console.log(`${"=".repeat(60)}\n`);
+
+  try {
+    const allTickers = db.getAllUniqueTickers();
+
+    if (allTickers.length === 0) {
+      console.log("[Cron] No tickers registered. Skipping weekly recap.");
+      return { tickersChecked: 0, earningsFound: 0, emailsSent: 0 };
+    }
+
+    console.log(`[Cron] Weekly recap checking ${allTickers.length} unique tickers...`);
+
+    const earningsResults = await fmp.checkEarningsForDateRange(allTickers, startDate, endDate);
+
+    console.log(`[Cron] Found ${earningsResults.length} earnings events for the week`);
+
+    if (earningsResults.length === 0) {
+      console.log("[Cron] No earnings found for the weekly recap.");
+      return { tickersChecked: allTickers.length, earningsFound: 0, emailsSent: 0 };
+    }
+
+    const analystEarnings = new Map(); // analystId → items[]
+
+    for (const result of earningsResults) {
+      const analysts = db.getAnalystsForTicker(result.ticker);
+      for (const analyst of analysts) {
+        if (!analystEarnings.has(analyst.id)) {
+          analystEarnings.set(analyst.id, {
+            analyst,
+            items: [],
+          });
+        }
+        analystEarnings.get(analyst.id).items.push({
+          ...result,
+          sector: analyst.sector,
+          subsector: analyst.subsector,
+        });
+      }
+    }
+
+    let emailsSent = 0;
+
+    for (const [analystId, { analyst, items }] of analystEarnings.entries()) {
+      if (items.length === 0) continue;
+
+      console.log(`[Cron] Sending Weekly Recap email to ${analyst.name} (${analyst.email}) — ${items.length} events`);
+      const sent = await email.sendWeeklyRecapEmail(analyst.email, analyst.name, startDate, endDate, items);
+      if (sent) emailsSent++;
+    }
+
+    const summary = {
+      tickersChecked: allTickers.length,
+      earningsFound: earningsResults.length,
+      emailsSent,
+      earningsTickers: [...new Set(earningsResults.map((r) => r.ticker))],
+    };
+
+    console.log(`\n[Cron] Weekly recap complete:`);
+    console.log(`  ✓ Tickers checked: ${summary.tickersChecked}`);
+    console.log(`  ✓ Earnings found:  ${summary.earningsFound}`);
+    console.log(`  ✓ Emails sent:     ${summary.emailsSent}`);
+    console.log(`${"=".repeat(60)}\n`);
+    
+    return summary;
+  } catch (err) {
+    console.error("[Cron] Error during weekly recap:", err);
+    throw err;
+  }
+}
+
 // ── Weekly Ticker Refresh ─────────────────────────────────────
 
 async function refreshAnalystTickers() {
@@ -254,10 +332,16 @@ function startCron() {
     await refreshAnalystTickers();
   }, { timezone });
 
+  // Weekly Recap on Sunday at 10 AM
+  cron.schedule("0 10 * * 0", async () => {
+    await runWeeklyRecap();
+  }, { timezone });
+
   console.log(
     `[Cron] Scheduled earnings check: "${schedule}" (${timezone})`
   );
   console.log(`[Cron] Scheduled weekly ticker refresh: "0 2 * * 0" (${timezone})`);
+  console.log(`[Cron] Scheduled weekly recap: "0 10 * * 0" (${timezone})`);
 }
 
 function stopCron() {
@@ -270,6 +354,7 @@ function stopCron() {
 
 module.exports = {
   runEarningsCheck,
+  runWeeklyRecap,
   refreshAnalystTickers,
   startCron,
   stopCron,
