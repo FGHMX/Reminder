@@ -138,52 +138,7 @@ async function runEarningsCheck(dateOverride = null) {
     console.log(`  ✓ Emails sent:     ${summary.emailsSent}`);
     console.log(`${"=".repeat(60)}\n`);
     
-    // --- IPO CHECK ---
-    console.log(`[Cron] Checking for new IPOs on ${checkDate}...`);
-    const ipos = await fmp.getIPOCalendar(checkDate, checkDate);
-    if (ipos && ipos.length > 0) {
-      const analysts = db.getAnalysts();
-      
-      for (const analyst of analysts) {
-        if (!analyst.sectors || analyst.sectors.length === 0) continue;
-        
-        const matchingIPOs = [];
-        
-        for (const ipo of ipos) {
-          if (!ipo.symbol) continue;
-          
-          const profile = await fmp.getCompanyProfile(ipo.symbol);
-          if (!profile || !profile.sector) continue;
-          
-          const mappedFmpSectors = new Set();
-          for (const s of analyst.sectors) {
-            const mapped = fmp.SECTOR_MAPPING[s];
-            if (mapped) mapped.forEach(ms => mappedFmpSectors.add(ms));
-          }
-          
-          const profileSector = profile.sector;
-          const profileMktCap = profile.mktCap || 0;
-          
-          const sectorMatches = mappedFmpSectors.has(profileSector);
-          // If mktCap is 0 (missing due to recent IPO), we include it just in case, otherwise we enforce limits
-          const mktCapMatches = profileMktCap === 0 || (profileMktCap >= 200000000 && profileMktCap <= 25000000000);
-          
-          if (sectorMatches && mktCapMatches) {
-            matchingIPOs.push({
-              company: profile.companyName || ipo.company,
-              symbol: ipo.symbol,
-              sector: analyst.sectors.find(s => fmp.SECTOR_MAPPING[s] && fmp.SECTOR_MAPPING[s].includes(profileSector)) || profileSector,
-              exchange: profile.exchangeShortName || ipo.exchange
-            });
-          }
-        }
-        
-        if (matchingIPOs.length > 0) {
-          console.log(`[Cron] Sending IPO email to ${analyst.name} for ${matchingIPOs.length} IPOs`);
-          await email.sendIPOEmail(analyst.email, analyst.name, checkDate, matchingIPOs);
-        }
-      }
-    }
+
 
     return summary;
   } catch (err) {
@@ -266,6 +221,39 @@ async function runWeeklyRecap() {
     console.log(`  ✓ Emails sent:     ${summary.emailsSent}`);
     console.log(`${"=".repeat(60)}\n`);
     
+    // --- IPO CALENDAR CHECK (FORWARD 7 DAYS) ---
+    const ipoStartDate = endDate; // Today (Sunday)
+    const ipoEndDate = format(new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"); // Next Sunday
+    
+    console.log(`\n${"=".repeat(60)}`);
+    console.log(`[Cron] Starting weekly IPO check for range: ${ipoStartDate} to ${ipoEndDate}`);
+    console.log(`${"=".repeat(60)}\n`);
+    
+    const upcomingIPOs = await fmp.checkUpcomingIPOsForWeek(ipoStartDate, ipoEndDate);
+    
+    if (upcomingIPOs.length > 0) {
+      const analysts = db.getAnalysts();
+      
+      for (const analyst of analysts) {
+        if (!analyst.sectors || analyst.sectors.length === 0) continue;
+        
+        // Filter IPOs for this analyst based on their sectors
+        const matchingIPOs = upcomingIPOs.filter(ipo => analyst.sectors.includes(ipo.sector));
+        
+        if (matchingIPOs.length > 0) {
+          console.log(`[Cron] Sending IPO Calendar email to ${analyst.name} for ${matchingIPOs.length} IPOs`);
+          await email.sendIPOEmail(analyst.email, analyst.name, `${ipoStartDate} - ${ipoEndDate}`, matchingIPOs);
+        }
+      }
+    } else {
+      console.log(`[Cron] No upcoming IPOs found in the next 7 days.`);
+    }
+
+    // --- GLOBAL TICKER REFRESH ---
+    // Instead of instantly adding IPOs, we run a full sync of the analyst sectors 
+    // to periodically update the DB with any finalized IPOs or market cap changes.
+    await refreshAnalystTickers();
+
     return summary;
   } catch (err) {
     console.error("[Cron] Error during weekly recap:", err);

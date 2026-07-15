@@ -41,19 +41,18 @@ async function uploadDb() {
   }
 }
 
-// Ensure subsequent uploads don't overlap rapidly
-let uploadTimeout = null;
-function scheduleDbUpload() {
-  if (!bucketName) return;
+// In serverless environments like Cloud Run, we cannot use setTimeout because the CPU suspends.
+// We fire the upload immediately.
+let isUploading = false;
+async function scheduleDbUpload() {
+  if (!bucketName || isUploading) return;
   
-  if (uploadTimeout) {
-    clearTimeout(uploadTimeout);
-  }
-  
-  uploadTimeout = setTimeout(async () => {
+  isUploading = true;
+  try {
     await uploadDb();
-    uploadTimeout = null;
-  }, 3000); // Wait 3 seconds after the last write to upload
+  } finally {
+    isUploading = false;
+  }
 }
 
 module.exports = {

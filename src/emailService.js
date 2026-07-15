@@ -240,12 +240,7 @@ function buildIPOEmail(analystName, date, ipoItems) {
     `;
   }
 
-  const formattedDate = new Date(date).toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const formattedDate = date;
 
   return `
 <!DOCTYPE html>
@@ -262,7 +257,7 @@ function buildIPOEmail(analystName, date, ipoItems) {
         🏛️ Laguna Capital
       </h1>
       <p style="margin: 8px 0 0; color: #10b981; font-size: 14px;">
-        IPO Alert
+        Calendario IPOs
       </p>
     </div>
     <!-- Greeting -->
@@ -293,7 +288,7 @@ function buildIPOEmail(analystName, date, ipoItems) {
 
 async function sendIPOEmail(analystEmail, analystName, date, ipoItems) {
   const html = buildIPOEmail(analystName, date, ipoItems);
-  const subject = `🚀 IPO Alert — ${ipoItems.length} new IPO(s) detected`;
+  const subject = `🚀 Calendario IPOs — ${ipoItems.length} nuevas IPO(s) programadas`;
 
   try {
     const info = await getTransporter().sendMail({

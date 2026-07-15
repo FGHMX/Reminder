@@ -100,6 +100,9 @@ app.post("/api/analyst", upload.single("csvFile"), async (req, res) => {
     // Save tickers
     db.addTickers(analystId, tickersData);
 
+    // Enforce DB upload to GCS before sending the response (prevents Cloud Run CPU throttling)
+    await gcsService.uploadDb();
+
     res.json({
       success: true,
       analystId,
@@ -145,7 +148,7 @@ app.get("/api/analyst/:id/tickers", (req, res) => {
 });
 
 // Delete analyst
-app.delete("/api/analyst/:id", (req, res) => {
+app.delete("/api/analyst/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const analyst = db.getAnalystById(id);
@@ -155,6 +158,10 @@ app.delete("/api/analyst/:id", (req, res) => {
     }
 
     db.deleteAnalyst(id);
+    
+    // Enforce DB upload to GCS before sending the response
+    await gcsService.uploadDb();
+    
     res.json({ success: true, message: `Deleted analyst: ${analyst.name}` });
   } catch (err) {
     res.status(500).json({ error: err.message });

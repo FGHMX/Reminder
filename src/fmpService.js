@@ -131,6 +131,13 @@ const SECTOR_MAPPING = {
   "Consumer Discretionary": ["Consumer Cyclical"]
 };
 
+const FMP_TO_APP_SECTOR = {};
+for (const [appSector, fmpSectors] of Object.entries(SECTOR_MAPPING)) {
+  fmpSectors.forEach(fmpSec => {
+    FMP_TO_APP_SECTOR[fmpSec] = appSector;
+  });
+}
+
 async function getTickersBySectors(sectors, minCap = 200000000, maxCap = 25000000000) {
   if (!sectors || sectors.length === 0) return [];
 
@@ -252,6 +259,45 @@ async function getIPOCalendar(fromDate, toDate) {
     console.error("[FMP] IPO calendar error:", err.message);
     return [];
   }
+}
+
+// ── IPO Verification Logic ────────────────────────────────────
+
+async function checkUpcomingIPOsForWeek(startDate, endDate) {
+  console.log(`[FMP] Checking upcoming IPOs between ${startDate} and ${endDate}...`);
+  
+  const ipos = await getIPOCalendar(startDate, endDate);
+  const matchedIPOs = [];
+
+  for (const ipo of ipos) {
+    if (!ipo.symbol) continue;
+
+    const profile = await getCompanyProfile(ipo.symbol);
+    if (!profile) continue;
+
+    const mktCap = profile.mktCap || 0;
+    // Market cap between 200M and 25B
+    if (mktCap >= 200000000 && mktCap <= 25000000000) {
+      const fmpSector = profile.sector;
+      const appSector = FMP_TO_APP_SECTOR[fmpSector] || fmpSector;
+
+      matchedIPOs.push({
+        symbol: ipo.symbol,
+        companyName: profile.companyName || ipo.company,
+        date: ipo.date,
+        exchange: ipo.exchange || profile.exchangeShortName,
+        priceRange: ipo.priceRange || "N/A",
+        shares: ipo.shares || "N/A",
+        marketCap: mktCap,
+        sector: appSector,
+        fmpSector: fmpSector
+      });
+    }
+    
+    await sleep(200);
+  }
+
+  return matchedIPOs;
 }
 
 // ── Earnings Detection Logic ──────────────────────────────────
@@ -484,8 +530,10 @@ module.exports = {
   getCompanyProfile,
   checkEarningsForDate,
   checkEarningsForDateRange,
+  checkUpcomingIPOsForWeek,
   isEarningsRelease,
   getTickersBySectors,
   getIPOCalendar,
   SECTOR_MAPPING,
+  FMP_TO_APP_SECTOR,
 };
