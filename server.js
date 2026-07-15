@@ -282,31 +282,43 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || "Internal server error" });
 });
 
+const gcsService = require("./src/gcsService");
+
 // ── Start Server ──────────────────────────────────────────────
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  // Initialize Database from GCS if configured
+  await gcsService.downloadDb();
+  db.getDb(); // Force schema initialization
+
   console.log(`\n${"=".repeat(60)}`);
   console.log(`  🏛️  Laguna Capital — Earnings Reminder`);
   console.log(`  🌐  http://localhost:${PORT}`);
-  console.log(`  📅  Cron: ${process.env.CRON_SCHEDULE || "30 16 * * 1-5"} (${process.env.CRON_TIMEZONE || "America/New_York"})`);
+  
+  if (process.env.DISABLE_CRON === "true") {
+    console.log(`  📅  Cron: DISABLED (Using Cloud Scheduler)`);
+  } else {
+    console.log(`  📅  Cron: ${process.env.CRON_SCHEDULE || "30 16 * * 1-5"} (${process.env.CRON_TIMEZONE || "America/New_York"})`);
+    // Start local cron job
+    cronJob.startCron();
+  }
   console.log(`${"=".repeat(60)}\n`);
-
-  // Start cron job
-  cronJob.startCron();
 });
 
 // ── Graceful Shutdown ─────────────────────────────────────────
 
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
   console.log("\n[Server] Shutting down...");
   cronJob.stopCron();
   db.closeDb();
+  await gcsService.uploadDb();
   process.exit(0);
 });
 
-process.on("SIGTERM", () => {
+process.on("SIGTERM", async () => {
   console.log("\n[Server] Shutting down...");
   cronJob.stopCron();
   db.closeDb();
+  await gcsService.uploadDb();
   process.exit(0);
 });

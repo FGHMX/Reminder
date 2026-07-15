@@ -4,8 +4,11 @@
 
 const Database = require("better-sqlite3");
 const path = require("path");
+const gcsService = require("./gcsService");
 
-const DB_PATH = path.join(__dirname, "..", "earnings_reminder.db");
+const DB_PATH = process.env.GCS_BUCKET_NAME 
+  ? gcsService.LOCAL_DB_PATH 
+  : path.join(__dirname, "..", "earnings_reminder.db");
 
 let db;
 
@@ -79,6 +82,9 @@ function initSchema() {
   } catch (err) {
     // Column already exists, ignore
   }
+
+  // Upload initial schema creation if using GCS
+  gcsService.scheduleDbUpload();
 }
 
 // ── Analyst CRUD ──────────────────────────────────────────────
@@ -89,6 +95,7 @@ function addAnalyst(name, email, sectors = []) {
     "INSERT INTO analysts (name, email, sectors) VALUES (?, ?, ?)"
   );
   const info = stmt.run(name.trim(), email.trim().toLowerCase(), JSON.stringify(sectors));
+  gcsService.scheduleDbUpload();
   return info.lastInsertRowid;
 }
 
@@ -96,6 +103,7 @@ function updateAnalystSectors(id, sectors) {
   const d = getDb();
   const stmt = d.prepare("UPDATE analysts SET sectors = ? WHERE id = ?");
   stmt.run(JSON.stringify(sectors), id);
+  gcsService.scheduleDbUpload();
 }
 
 function getAnalysts() {
@@ -129,6 +137,7 @@ function getAnalystById(id) {
 function deleteAnalyst(id) {
   const d = getDb();
   d.prepare("DELETE FROM analysts WHERE id = ?").run(id);
+  gcsService.scheduleDbUpload();
 }
 
 function analystExists(email) {
@@ -163,6 +172,7 @@ function addTickers(analystId, tickerRows) {
   });
 
   insertMany(tickerRows);
+  gcsService.scheduleDbUpload();
 }
 
 function getTickersByAnalyst(analystId) {
@@ -177,6 +187,7 @@ function getTickersByAnalyst(analystId) {
 function deleteTickersByAnalyst(analystId) {
   const d = getDb();
   d.prepare("DELETE FROM tickers WHERE analyst_id = ?").run(analystId);
+  gcsService.scheduleDbUpload();
 }
 
 function getAllUniqueTickers() {
@@ -215,6 +226,7 @@ function logNotification(analystId, ticker, companyName, docType, title, url) {
        (analyst_id, ticker, company_name, document_type, title, url)
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(analystId, ticker, companyName, docType, title, url);
+  gcsService.scheduleDbUpload();
 }
 
 function getNotificationLog(limit = 100) {
@@ -239,6 +251,7 @@ function logCheckHistory(checkDate, tickersChecked, earningsFound, emailsSent, d
        (check_date, tickers_checked, earnings_found, emails_sent, details)
      VALUES (?, ?, ?, ?, ?)`
   ).run(checkDate, tickersChecked, earningsFound, emailsSent, JSON.stringify(details));
+  gcsService.scheduleDbUpload();
 }
 
 function getCheckHistory(limit = 30) {
