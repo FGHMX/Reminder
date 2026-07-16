@@ -318,7 +318,6 @@ process.on("SIGINT", async () => {
   console.log("\n[Server] Shutting down...");
   cronJob.stopCron();
   db.closeDb();
-  await gcsService.uploadDb();
   process.exit(0);
 });
 
@@ -326,6 +325,5 @@ process.on("SIGTERM", async () => {
   console.log("\n[Server] Shutting down...");
   cronJob.stopCron();
   db.closeDb();
-  await gcsService.uploadDb();
   process.exit(0);
 });
