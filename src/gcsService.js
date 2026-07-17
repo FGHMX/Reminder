@@ -29,10 +29,24 @@ async function uploadDb() {
   if (!bucketName) return false;
 
   try {
-    console.log(`[GCS] Uploading ${DB_FILENAME} to bucket ${bucketName}...`);
-    await storage.bucket(bucketName).upload(LOCAL_DB_PATH, {
+    console.log(`[GCS] Backing up and uploading ${DB_FILENAME} to bucket ${bucketName}...`);
+    
+    // Create a safe hot-backup to capture all WAL and memory data
+    const db = require('./database').getDb();
+    const backupPath = LOCAL_DB_PATH + '.backup';
+    await db.backup(backupPath);
+
+    // Upload the safe backup file to GCS instead of the live DB
+    await storage.bucket(bucketName).upload(backupPath, {
       destination: DB_FILENAME,
     });
+    
+    // Clean up the backup file locally
+    const fs = require('fs');
+    if (fs.existsSync(backupPath)) {
+      fs.unlinkSync(backupPath);
+    }
+    
     console.log(`[GCS] Successfully uploaded ${DB_FILENAME}`);
     return true;
   } catch (err) {
